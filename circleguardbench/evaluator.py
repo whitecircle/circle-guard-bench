@@ -109,14 +109,20 @@ class Evaluator:
             logger.warning(f"No cached results found for model: {model_name}")
             return
 
-        # The model config (and its eval_on) isn't loaded here, so infer what was
-        # evaluated from the result hashes: answer results are stored as ans_/jb_ans_
-        answer_prefixes = ("ans_", "jb_ans_")
-        evaluate_answers = any(
-            h.startswith(answer_prefixes) for h in all_existing_results
+        # The model config isn't loaded here. Infer each evaluation group
+        # independently so a missing sibling group does not require results.
+        evaluate_default_prompts = any(
+            not h.startswith(("ans_", "jb_")) for h in all_existing_results
         )
-        evaluate_prompts = any(
-            not h.startswith(answer_prefixes) for h in all_existing_results
+        evaluate_jailbreaked_prompts = any(
+            h.startswith("jb_") and not h.startswith("jb_ans_")
+            for h in all_existing_results
+        )
+        evaluate_default_answers = any(
+            h.startswith("ans_") for h in all_existing_results
+        )
+        evaluate_jailbreaked_answers = any(
+            h.startswith("jb_ans_") for h in all_existing_results
         )
 
         # Define categories
@@ -157,7 +163,7 @@ class Evaluator:
             jailbreaked_answers_metrics = None
 
             # Prepare data for each evaluation type
-            if evaluate_prompts:
+            if evaluate_default_prompts:
                 default_prompts_data = self._prepare_default_prompts_data(
                     category_dataset
                 )
@@ -165,17 +171,17 @@ class Evaluator:
                     all_existing_results, *default_prompts_data, category
                 )
 
-                if category != "Safe Prompts":
-                    jailbreaked_prompts_data = self._prepare_jailbreaked_prompts_data(
-                        category_dataset
-                    )
-                    jailbreaked_prompts_metrics = self._calculate_metrics_from_cached(
-                        all_existing_results, *jailbreaked_prompts_data, category
-                    )
-                else:
-                    jailbreaked_prompts_metrics = default_prompts_metrics
+            if category == "Safe Prompts":
+                jailbreaked_prompts_metrics = default_prompts_metrics
+            elif evaluate_jailbreaked_prompts:
+                jailbreaked_prompts_data = self._prepare_jailbreaked_prompts_data(
+                    category_dataset
+                )
+                jailbreaked_prompts_metrics = self._calculate_metrics_from_cached(
+                    all_existing_results, *jailbreaked_prompts_data, category
+                )
 
-            if evaluate_answers:
+            if evaluate_default_answers:
                 default_answers_data = self._prepare_default_answers_data(
                     category_dataset
                 )
@@ -183,15 +189,15 @@ class Evaluator:
                     all_existing_results, *default_answers_data, category
                 )
 
-                if category != "Safe Prompts":
-                    jailbreaked_answers_data = self._prepare_jailbreaked_answers_data(
-                        category_dataset
-                    )
-                    jailbreaked_answers_metrics = self._calculate_metrics_from_cached(
-                        all_existing_results, *jailbreaked_answers_data, category
-                    )
-                else:
-                    jailbreaked_answers_metrics = default_answers_metrics
+            if category == "Safe Prompts":
+                jailbreaked_answers_metrics = default_answers_metrics
+            elif evaluate_jailbreaked_answers:
+                jailbreaked_answers_data = self._prepare_jailbreaked_answers_data(
+                    category_dataset
+                )
+                jailbreaked_answers_metrics = self._calculate_metrics_from_cached(
+                    all_existing_results, *jailbreaked_answers_data, category
+                )
 
             # Save metrics for current category
             all_metrics[category] = GuardBenchMetrics(
