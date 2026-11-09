@@ -34,7 +34,8 @@ class ModelProvidersRegistry:
     ) -> str:
         if (
             model_type in [ModelType.LLM_SO, ModelType.OPENAI_MODERATION]
-            and inference_engine != InferenceEngine.OPENAI_API
+            and inference_engine
+            not in (InferenceEngine.OPENAI_API, InferenceEngine.ORCAROUTER)
         ):
             raise ValueError(
                 f"Model type {model_type.value} supports only 'openai_api' inference engine!"
@@ -66,6 +67,22 @@ class ModelProvidersRegistry:
             return "vllm_regexp"
         elif inference_engine == InferenceEngine.SGLANG:
             return "sglang_regexp"
+        elif inference_engine == InferenceEngine.ORCAROUTER:
+            # OrcaRouter Cyber Inference speaks the OpenAI wire format.
+            if model_type == ModelType.LLM_SO:
+                return "orcarouter_structured"
+            elif model_type in [
+                ModelType.LLM_REGEXP,
+                ModelType.ATLA_SELENE,
+                ModelType.LLAMA_GUARD,
+            ]:
+                return "orcarouter_regexp"
+            elif model_type == ModelType.OPENAI_MODERATION:
+                return "orcarouter_moderation"
+            raise ValueError(
+                f"Model type {model_type.value} is not supported by the 'orcarouter' "
+                "inference engine"
+            )
 
 
 MODEL_PROVIDERS_REGISTRY = ModelProvidersRegistry()

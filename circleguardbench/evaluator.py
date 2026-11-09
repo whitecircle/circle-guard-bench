@@ -2,8 +2,10 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 
-from datasets import Dataset
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # imported lazily by context.load_dataset()
+    from datasets import Dataset
 
 from circleguardbench.context import GuardbenchContext
 from circleguardbench.models_config import EvalOn, ModelType
@@ -500,6 +502,13 @@ class Evaluator:
                 error_count += 1
 
         if all_predictions:
+            from sklearn.metrics import (  # imported here: only metrics need scikit-learn
+                accuracy_score,
+                f1_score,
+                precision_score,
+                recall_score,
+            )
+
             f1 = f1_score(all_ground_truths, all_predictions, zero_division=0)
             precision = precision_score(
                 all_ground_truths, all_predictions, zero_division=0
@@ -523,7 +532,7 @@ class Evaluator:
 
         return None
 
-    def _prepare_default_prompts_data(self, dataset: Dataset) -> tuple:
+    def _prepare_default_prompts_data(self, dataset: "Dataset") -> tuple:
         """Prepare data for evaluating regular prompts."""
         dialogs = []
         ground_truths = []
@@ -539,7 +548,7 @@ class Evaluator:
 
         return dialogs, ground_truths, prompt_hashes
 
-    def _prepare_jailbreaked_prompts_data(self, dataset: Dataset) -> tuple:
+    def _prepare_jailbreaked_prompts_data(self, dataset: "Dataset") -> tuple:
         """Prepare data for evaluating jailbroken prompts."""
         dialogs = []
         prompt_hashes = []
@@ -562,7 +571,7 @@ class Evaluator:
 
         return dialogs, ground_truths, prompt_hashes
 
-    def _prepare_default_answers_data(self, dataset: Dataset) -> tuple:
+    def _prepare_default_answers_data(self, dataset: "Dataset") -> tuple:
         """Prepare data for evaluating answers to regular prompts."""
         dialogs = []
         ground_truths = []
@@ -585,7 +594,7 @@ class Evaluator:
 
         return dialogs, ground_truths, prompt_hashes
 
-    def _prepare_jailbreaked_answers_data(self, dataset: Dataset) -> tuple:
+    def _prepare_jailbreaked_answers_data(self, dataset: "Dataset") -> tuple:
         """Prepare data for evaluating answers to jailbroken prompts."""
         dialogs = []
         ground_truths = []
@@ -616,7 +625,7 @@ class Evaluator:
         self,
         model_name: str,
         provider: BaseModelProvider,
-        dataset: Dataset,
+        dataset: "Dataset",
         max_concurrent: int,
         category: str,
         all_existing_results: dict,
@@ -642,7 +651,7 @@ class Evaluator:
         self,
         model_name: str,
         provider: BaseModelProvider,
-        dataset: Dataset,
+        dataset: "Dataset",
         max_concurrent: int,
         category: str,
         all_existing_results: dict,
@@ -668,7 +677,7 @@ class Evaluator:
         self,
         model_name: str,
         provider: BaseModelProvider,
-        dataset: Dataset,
+        dataset: "Dataset",
         max_concurrent: int,
         category: str,
         all_existing_results: dict,
@@ -694,7 +703,7 @@ class Evaluator:
         self,
         model_name: str,
         provider: BaseModelProvider,
-        dataset: Dataset,
+        dataset: "Dataset",
         max_concurrent: int,
         category: str,
         all_existing_results: dict,

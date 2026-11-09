@@ -8,16 +8,33 @@ import click
 
 from circleguardbench.context import GuardbenchContext
 from circleguardbench.evaluator import Evaluator
-from circleguardbench.leaderboard import Leaderboard
 from tqdm import tqdm
 
 from circleguardbench.models_config import ModelType
+from circleguardbench.orcarouter.cli import orcarouter as orcarouter_group
 
 
 logger = logging.getLogger("guardbench.cli")
 
 # Create context instance
 pass_context = click.make_pass_decorator(GuardbenchContext, ensure=True)
+
+
+def root_context() -> GuardbenchContext:
+    """Create the shared GuardbenchContext for the root group's click ctx.
+
+    The context is stored on the raw click ctx so subcommands (whose own
+    ``pass_context`` wraps it) can reach it via :func:`get_context`."""
+    click_ctx = click.get_current_context()
+    gctx = GuardbenchContext()
+    click_ctx.obj = gctx
+    return gctx
+
+
+def get_context(cli_ctx: click.Context) -> GuardbenchContext:
+    """`orcarouter` subcommands receive a plain click ctx; the shared
+    GuardbenchContext lives on the root group (created by `pass_context`)."""
+    return cli_ctx.find_root().obj
 
 
 @click.group()
@@ -48,9 +65,7 @@ pass_context = click.make_pass_decorator(GuardbenchContext, ensure=True)
     "--results_dir", default="results", help="Directory to store benchmark results"
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
-@pass_context
 def cli(
-    ctx: GuardbenchContext,
     bench_data: str,
     models: str,
     skip_models_load: bool,
@@ -62,10 +77,18 @@ def cli(
     if verbose:
         logging.getLogger("guardbench").setLevel(logging.DEBUG)
 
+    # `orcarouter` only needs prompt templates and a models file, not the
+    # benchmark dataset (see `orcarouter` commands below); the dataset is
+    # loaded lazily by commands that actually evaluate.
+    click_ctx = click.get_current_context()
+    is_orcarouter = click_ctx.invoked_subcommand == "orcarouter"
+
+    gctx = root_context()
+
     # Load models configuration
     if not skip_models_load:
         try:
-            ctx.load_models(models)
+            gctx.load_models(models)
         except Exception as e:
             logger.critical(f"Failed to load models configuration: {e}")
             click.echo(f"Critical error: {e}", err=True)
@@ -73,22 +96,23 @@ def cli(
 
     # Load prompt templates
     try:
-        ctx.load_prompt_templates(prompts)
+        gctx.load_prompt_templates(prompts)
     except Exception as e:
         logger.critical(f"Failed to load prompt templates: {e}")
         click.echo(f"Critical error: {e}", err=True)
         sys.exit(1)
 
-    # Load dataset
-    try:
-        ctx.load_dataset(bench_data)
-    except Exception as e:
-        logger.critical(f"Failed to load dataset: {e}")
-        click.echo(f"Critical error: {e}", err=True)
-        sys.exit(1)
+    if not is_orcarouter:
+        # Load dataset
+        try:
+            gctx.load_dataset(bench_data)
+        except Exception as e:
+            logger.critical(f"Failed to load dataset: {e}")
+            click.echo(f"Critical error: {e}", err=True)
+            sys.exit(1)
 
-    ctx.results_dir = results_dir
-    ctx.is_initialized = True
+    gctx.results_dir = results_dir
+    gctx.is_initialized = True
 
 
 @cli.command()
@@ -222,6 +246,8 @@ def leaderboard(
     Use --no-categories to disable grouping.
     """
     try:
+        from circleguardbench.leaderboard import Leaderboard
+
         leaderboard_instance = Leaderboard(results_dir=ctx.results_dir)
         click.echo("Loading leaderboard...")
         leaderboard_instance.show_leaderboard(
@@ -293,6 +319,9 @@ def dataset_info(ctx: GuardbenchContext):
     for category in sorted(ctx.dataset_categories):
         count = sum(1 for c in ctx.dataset["harm_category"] if c == category)
         click.echo(f"  - {category}: {count} examples")
+
+
+cli.add_command(orcarouter_group, "orcarouter")
 
 
 if __name__ == "__main__":

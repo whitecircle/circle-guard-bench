@@ -6,7 +6,10 @@ from typing import List, Optional, Dict
 from pathlib import Path
 
 import jinja2
-from datasets import load_dataset, Dataset
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datasets import Dataset
 
 from circleguardbench.models_config import ModelsRegistry, load_models_configs_registery
 
@@ -24,6 +27,15 @@ class GuardbenchContext:
         self.is_initialized: bool = False
         self.results_dir: str = ""
         self.bench_name: str = ""
+
+    def _import_datasets(self):
+        try:
+            import datasets
+        except ImportError as exc:
+            raise ImportError(
+                "Loading a benchmark dataset requires the 'datasets' package: pip install datasets"
+            ) from exc
+        return datasets
 
     def load_models(self, models_path: str = "configs/models.json") -> None:
         """
@@ -108,13 +120,15 @@ class GuardbenchContext:
             self.bench_name = dataset_path.split("/")[-1].split(".")[0]
 
             if os.path.isfile(dataset_path) and dataset_path.endswith(".jsonl"):
+                datasets = self._import_datasets()
                 with open(dataset_path, "r", encoding="utf-8") as f:
                     data = [json.loads(line) for line in f if line.strip()]
 
-                self.dataset = Dataset.from_list(data)
+                self.dataset = datasets.Dataset.from_list(data)
                 logger.info(f"Loaded dataset from local JSONL file: {dataset_path}")
             else:
-                dataset = load_dataset(dataset_path)
+                datasets = self._import_datasets()
+                dataset = datasets.load_dataset(dataset_path)
 
                 if hasattr(dataset, "keys") and "train" in dataset:
                     self.dataset = dataset["train"]

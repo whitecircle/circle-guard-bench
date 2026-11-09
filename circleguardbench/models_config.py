@@ -30,6 +30,7 @@ class InferenceEngine(str, Enum):
     VLLM = "vllm"
     SGLANG = "sglang"
     TRANSFORMERS = "transformers"  # for transformers_clf
+    ORCAROUTER = "orcarouter"  # OrcaRouter Cyber Inference (OpenAI-compatible gateway)
 
 
 # OpenAI API parameters
@@ -39,6 +40,39 @@ class OpenAIParams(BaseModel):
     api_key: Optional[str] = Field(
         default_factory=lambda: os.environ.get("OPENAI_API_KEY"),
         description="API key for authentication. Defaults to OPENAI_API_KEY environment variable.",
+    )
+
+
+class OrcaRouterParams(BaseModel):
+    """Parameters for the `orcarouter` inference engine.
+
+    Credential resolution (see circleguardbench.orcarouter.credentials):
+    `api_key` -> ORCAROUTER_API_KEY -> stored PKCE credential.  `endpoint`
+    defaults to https://api.orcarouter.ai/v1 and can be overridden with
+    ORCA_API_BASE_URL.  `capability` selects which catalog entries the model
+    selector may offer; `input_modalities` is what this guard actually sends
+    (e.g. ["text", "image"]) and filters multimodal models fail-closed.
+    """
+
+    api_model_name: str = Field(
+        ...,
+        description="OrcaRouter model id, e.g. 'orcarouter/auto', 'orcacyber-ultra-1.0', 'orcarouter/fusion'",
+    )
+    endpoint: Optional[str] = Field(
+        default=None,
+        description="OrcaRouter inference base URL. Defaults to https://api.orcarouter.ai/v1.",
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Explicit OrcaRouter API key. Prefer the ORCAROUTER_API_KEY env var or `guardbench orcarouter login`.",
+    )
+    capability: str = Field(
+        default="inference",
+        description="Catalog capability filter: inference, moderation, embedding, image, video, rerank.",
+    )
+    input_modalities: List[str] = Field(
+        default_factory=lambda: ["text"],
+        description="Input modalities this guard sends; multimodal models must declare them.",
     )
 
 
@@ -52,7 +86,7 @@ class ModelConfig(BaseModel):
     inference_engine: InferenceEngine = Field(
         ..., description="Engine used for inference (openai_api or vllm)"
     )
-    params: Optional[Union[OpenAIParams, Dict[str, Any]]] = Field(
+    params: Optional[Union[OpenAIParams, OrcaRouterParams, Dict[str, Any]]] = Field(
         default=None, description="Engine-specific parameters. Required for OpenAI API."
     )
     max_concurrency: Optional[int] = Field(
@@ -68,9 +102,13 @@ class ModelConfig(BaseModel):
         engine = self.inference_engine
         params = self.params
 
-        if self.type == ModelType.LLM_SO and engine != InferenceEngine.OPENAI_API:
+        if self.type == ModelType.LLM_SO and engine not in (
+            InferenceEngine.OPENAI_API,
+            InferenceEngine.ORCAROUTER,
+        ):
             raise ValueError(
-                "LLM_SO models can only use OPENAI_API as inference engine"
+                "LLM_SO models can only use OPENAI_API (or the OpenAI-compatible "
+                "orcarouter engine) as inference engine"
             )
 
         if self.use_cot and self.type not in [ModelType.LLM_SO, ModelType.LLM_REGEXP]:
@@ -91,6 +129,22 @@ class ModelConfig(BaseModel):
             # Convert dict to OpenAIParams if it's not already
             if not isinstance(params, OpenAIParams):
                 self.params = OpenAIParams(**params)
+
+        elif engine == InferenceEngine.ORCAROUTER:
+            if self.type == ModelType.CLASSIFIER:
+                raise ValueError(
+                    "Classifier models can only use TRANSFORMERS as inference engine"
+                )
+            if (
+                not params
+                or isinstance(params, dict)
+                and "api_model_name" not in params
+            ):
+                raise ValueError(
+                    "OrcaRouter requires params with 'api_model_name' (e.g. 'orcarouter/auto')"
+                )
+            if not isinstance(params, OrcaRouterParams):
+                self.params = OrcaRouterParams(**params)
 
         elif engine == InferenceEngine.VLLM:
             # For VLLM, params are optional but if provided must include 'model'

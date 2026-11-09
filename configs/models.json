@@ -71,5 +71,65 @@
     },
     "max_concurrency": 20,
     "use_cot": false
+  },
+  {
+    "name": "OrcaRouter: OrcaCyber Ultra (CoT, SO)",
+    "type": "llm_so",
+    "eval_on": "all",
+    "inference_engine": "orcarouter",
+    "params": {
+      "api_model_name": "orcacyber-ultra-1.0",
+      "capability": "inference",
+      "input_modalities": [
+        "text"
+      ]
+    },
+    "max_concurrency": 20,
+    "use_cot": false
+  },
+  {
+    "name": "OrcaRouter: OrcaCyber Zero (Strict)",
+    "type": "llm_regexp",
+    "eval_on": "all",
+    "inference_engine": "orcarouter",
+    "params": {
+      "api_model_name": "orcacyber-zero-1.5",
+      "capability": "inference",
+      "input_modalities": [
+        "text"
+      ]
+    },
+    "max_concurrency": 20,
+    "use_cot": false
+  },
+  {
+    "name": "OrcaRouter: auto (CoT)",
+    "type": "llm_regexp",
+    "eval_on": "all",
+    "inference_engine": "orcarouter",
+    "params": {
+      "api_model_name": "orcarouter/auto",
+      "capability": "inference",
+      "input_modalities": [
+        "text"
+      ]
+    },
+    "max_concurrency": 20,
+    "use_cot": true
+  },
+  {
+    "name": "OrcaRouter: fusion (Strict)",
+    "type": "llm_regexp",
+    "eval_on": "all",
+    "inference_engine": "orcarouter",
+    "params": {
+      "api_model_name": "orcarouter/fusion",
+      "capability": "inference",
+      "input_modalities": [
+        "text"
+      ]
+    },
+    "max_concurrency": 20,
+    "use_cot": false
   }
 ]
