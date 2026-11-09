@@ -119,6 +119,69 @@ CircleGuardBench supports several inference engines:
 
 To use the `vllm` or `sglang` engines, you need to install the corresponding optional dependencies.
 
+### OrcaRouter Cyber Inference
+
+[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible AI gateway that routes many
+providers behind one endpoint. The `orcarouter` engine adds it as a first-class, named
+provider alongside `openai_api` and the local engines, so guard models hosted on the
+gateway can be benchmarked with exactly the same evaluation flow.
+
+- Inference and model catalog: `https://api.orcarouter.ai/v1` (override with `ORCA_API_BASE_URL`)
+- Sign-in and API-key issuance: `https://www.orcarouter.ai` (override with `ORCA_AUTH_BASE_URL`)
+- Model recommendations, in this order:
+  - **`orcarouter/auto`** — default; the gateway routes to a compatible model, any key works.
+  - **OrcaCyber Ultra** (`orcacyber-ultra-1.0`) and **OrcaCyber Zero** (`orcacyber-zero-1.5`, plus `1.0`) —
+    dedicated cyber models for security teams doing authorized, scoped security inference.
+    See the [cyber tier](https://www.orcarouter.ai/models?tier=cyber).
+  - **`orcarouter/fusion`** — general fallback.
+- Security-model documentation: https://www.orcarouter.ai/cyber
+
+Authentication is available in two ways:
+
+```bash
+# 1. API key (env var, config `api_key`, or stored interactively -- never logged)
+export ORCAROUTER_API_KEY=sk-orca-...
+guardbench orcarouter key set          # prompt for a key and store it (masked)
+guardbench orcarouter status           # show which credential is in use (masked)
+
+# 2. OAuth 2.0 + PKCE (loopback redirect, or out-of-band code with --oob)
+guardbench orcarouter login
+guardbench orcarouter login --oob
+```
+
+`guardbench orcarouter login` prints a URL and uses PKCE (S256, no client secret, no
+pre-registered redirect URI); it never handles a user password itself. A device-code flow is
+also available via `--device` for hosts without a browser. Both sign-in methods end in the same
+credential store, and an `HTTP 401` from the gateway marks the exact stored credential as
+needing re-authentication instead of silently reusing it.
+
+Model discovery is live: `guardbench orcarouter models` reads `GET /v1/models` with your own
+key and filters by capability and input modality. Only entries whose declared endpoint types
+are text chat are offered for guard evaluation, and multimodal filters fail closed (a model
+must declare the input modality). When discovery is unavailable, a small verified cold-start
+seed (only `orcarouter/auto`) is used and clearly marked as `degraded`. Run
+`guardbench orcarouter models --refresh` to retry.
+
+Add an entry to `configs/models.json` (the four `OrcaRouter:` entries are examples):
+
+```json
+{
+  "name": "OrcaRouter: OrcaCyber Ultra (CoT, SO)",
+  "type": "llm_so",
+  "eval_on": "all",
+  "inference_engine": "orcarouter",
+  "params": {
+    "api_model_name": "orcacyber-ultra-1.0",
+    "capability": "inference",
+    "input_modalities": ["text"]
+  },
+  "max_concurrency": 20
+}
+```
+
+Removing a credential is explicit: `guardbench orcarouter key clear` and
+`guardbench orcarouter logout` delete the stored secret; nothing is deleted implicitly.
+
 ## Dataset Format
 
 CircleGuardBench uses a standardized dataset format. Below are the required columns and their descriptions:

@@ -2,12 +2,16 @@ from abc import ABC, abstractmethod
 import asyncio
 import logging
 from typing import List, Dict, Callable, TypeVar
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
+HAVE_TENACITY = True
+try:
+    from tenacity import (
+        retry,
+        stop_after_attempt,
+        wait_exponential,
+        retry_if_exception_type,
+    )
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    HAVE_TENACITY = False
 
 import jinja2
 from pydantic import BaseModel, Field
@@ -70,6 +74,9 @@ class BaseModelProvider(ABC):
         return wrapper
 
     def _retry_decorator(self, func: Callable[..., T]) -> T:
+        if not HAVE_TENACITY:
+            return func
+
         @retry(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -804,3 +811,10 @@ def register_providers():
         OpenAIModerationModelProvider
     )
     MODEL_PROVIDERS_REGISTRY.register("transformers_clf")(ClassifierModelProvider)
+
+    # OrcaRouter Cyber Inference (https://www.orcarouter.ai/cyber)
+    from circleguardbench.providers.orcarouter_providers import (
+        register_orcarouter_providers,
+    )
+
+    register_orcarouter_providers(MODEL_PROVIDERS_REGISTRY)
